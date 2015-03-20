@@ -1,0 +1,196 @@
+<?php
+  
+/*
+* Implements of hook_requirements();
+*/
+function lazyloadxt_requirements($phase){
+  $requirements = array();
+
+  if($phase == 'runtime'){
+    if(file_exists(libraries_get_path('lazy-load-xt'))){
+      $requirements['lazy-load-xt'] = array(
+        'title' => t('Lazy load XT'),
+        'value' => t('Lazy load XT found.'),
+        'severity' => REQUIREMENT_OK,
+      );
+    }else{
+      $requirements['lazy-load-xt'] = array(
+        'title' => t('Lazy load XT'),
+        'value' => t('Lazy load XT not found.'),
+        'description' => t('Check the readme files for more instructions.'),
+        'severity' => REQUIREMENT_ERROR,
+      );
+    }
+  }
+
+  return $requirements;
+}
+
+/*
+* Implements of template_preprocess_page();
+*/
+function lazyloadxt_preprocess_page(&$vars){
+  $js = libraries_get_path('lazy-load-xt');
+  drupal_add_js($js . '/dist/jquery.lazyloadxt.min.js');
+  
+  //drupal_set_message('<pre>'.print_r($js, true).'</pre>');
+}
+  
+/**
+* Implements hook_field_formatter_info().
+*/
+function lazyloadxt_field_formatter_info(){
+  $styles = _lazyload_image_styles();
+  
+  $info = array(
+    'lazyloadxt' => array(
+      'label' => t('Lazy Load XT'),
+      'field types' => array('image'),
+      'description' => t('Display image as Lazy Load XT'),
+      'settings' => array(
+        'style' => $styles['none'],
+        'image_to_display' => ''
+      )
+    )
+  );
+  
+  return $info;
+}
+
+/**
+* Implements hook_field_formatter_settings_form().
+*/
+function lazyloadxt_field_formatter_settings_form($field, $instance, $view_mode, $form, &$form_state){
+  $styles = _lazyload_image_styles();
+  
+  $display = $instance['display'][$view_mode];
+  $settings = $display['settings'];
+  
+  $element = array();
+  
+  $element['style'] = array(
+    '#type' => 'select',
+    '#title' => t('Image Style'),
+    '#description' => t('Select an image style'),
+    '#default_value' => $settings['styles'],
+    '#options' => $styles
+  );
+  
+  $element['image_to_display'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Images to display'),
+    '#description' => t('Insert a number of images to display. Empty for all images.'),
+    '#default_value' => $settings['image_to_display']
+  );
+  
+  return $element;
+}
+
+/**
+* Implements hook_field_formatter_settings_summary().
+*/
+function lazyloadxt_field_formatter_settings_summary($field, $instance, $view_mode){
+  $styles = _lazyload_image_styles();
+  
+  $display = $instance['display'][$view_mode];
+  $settings = $display['settings'];
+  $summary = $styles[$settings['style']] . '<br />';
+  $summary .= t('Images to display: ') . $settings['image_to_display'];
+  return $summary;
+}
+
+/**
+* Implements hook_field_formatter_view().
+*/
+function lazyloadxt_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display){
+  $element = array();
+  
+  switch($display['type']){
+    case 'lazyloadxt':
+      $image_to_display = $display['settings']['image_to_display'];
+
+      if($image_to_display > 0){
+        for($i = 0; $i < $image_to_display; $i++){
+          if(array_key_exists($i, $items)){
+            $style = $display['settings']['style'];
+            $url = $style == 'none' ? file_create_url($items[$i]['uri']) : image_style_url($style, $items[$i]['uri']);
+            $dimensions = array(
+              'width' => $items[$i]['width'],
+              'height' => $items[$i]['height']
+            );
+            
+            if($style != 'none'){
+              $style_info = image_style_load($style);
+              foreach($style_info['effects'] as $effect){
+                image_style_transform_dimensions($style, $dimensions);
+              }
+            }
+            
+            $element[$i] = array(
+              '#theme' => 'lazyloadxt',
+              '#url' => $url,
+              '#width' => $dimensions['width'],
+              '#height' => $dimensions['height']
+            );
+          }
+        }
+      }else{
+        foreach($items as $delta => $item) {
+           $style = $display['settings']['style'];
+           $url = $style == 'none' ? file_create_url($item['uri']) : image_style_url($style, $item['uri']);
+           $dimensions = array(
+             'width' => $item['width'],
+             'height' => $item['height']
+           );
+           
+           if($style != 'none'){
+             $style_info = image_style_load($style);
+             foreach($style_info['effects'] as $effect){
+               image_style_transform_dimensions($style, $dimensions);
+             }
+           }
+           
+           $element[$delta] = array(
+             '#theme' => 'lazyloadxt',
+             '#url' => $url,
+             '#width' => $dimensions['width'],
+             '#height' => $dimensions['height']
+           );
+        }
+      }
+    break;
+  }
+  
+  return $element;
+}
+
+/**
+* Implements hook_theme().
+*/
+function lazyloadxt_theme(){
+  return array(
+    'lazyloadxt' => array(
+      'template' => 'lazyloadxt',
+      'variables' => array(
+        'url' => NULL,
+        'width' => NULL,
+        'height' => NULL
+      )
+    )
+  );
+}
+
+/**
+* Get all the active styles.
+*/
+function _lazyload_image_styles(){
+  $styles = image_styles();
+  
+  $options = array('none' => t('None (original image)'));
+  
+  foreach($styles as $key => $style){
+    $options[$key] = $style['label'];
+  }
+  
+  return $options;
+}
