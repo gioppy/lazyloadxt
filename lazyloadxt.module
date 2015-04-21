@@ -32,8 +32,6 @@ function lazyloadxt_requirements($phase){
 function lazyloadxt_preprocess_page(&$vars){
   $js = libraries_get_path('lazy-load-xt');
   drupal_add_js($js . '/dist/jquery.lazyloadxt.min.js');
-  
-  //drupal_set_message('<pre>'.print_r($js, true).'</pre>');
 }
   
 /**
@@ -49,7 +47,9 @@ function lazyloadxt_field_formatter_info(){
       'description' => t('Display image as Lazy Load XT'),
       'settings' => array(
         'style' => $styles['none'],
-        'image_to_display' => ''
+        'image_to_display' => '',
+        'colorbox' => FALSE,
+        'colorbox_style' => $styles['none']
       )
     )
   );
@@ -83,6 +83,23 @@ function lazyloadxt_field_formatter_settings_form($field, $instance, $view_mode,
     '#default_value' => $settings['image_to_display']
   );
   
+  if(module_exists('colorbox')){
+    $element['colorbox'] = array(
+      '#type' => 'checkbox',
+      '#title' => t('Use colorbox'),
+      '#description' => t('Add colorbox overlay on click'),
+      '#default_value' => $settings['colorbox']
+    );
+    
+    $element['colorbox_style'] = array(
+      '#type' => 'select',
+      '#title' => t('Colorbox: Image Style'),
+      '#description' => t('Colorbox: Select an image style'),
+      '#default_value' => $settings['colorbox_style'],
+      '#options' => $styles
+    );
+  }
+  
   return $element;
 }
 
@@ -96,6 +113,12 @@ function lazyloadxt_field_formatter_settings_summary($field, $instance, $view_mo
   $settings = $display['settings'];
   $summary = $styles[$settings['style']] . '<br />';
   $summary .= t('Images to display: ') . $settings['image_to_display'];
+  
+  if(module_exists('colorbox') && $settings['colorbox'] == TRUE){
+    $summary .= '<br />' . t('Colorbox') . '<br />';
+    $summary .= $styles[$settings['colorbox_style']];
+  }
+  
   return $summary;
 }
 
@@ -108,6 +131,7 @@ function lazyloadxt_field_formatter_view($entity_type, $entity, $field, $instanc
   switch($display['type']){
     case 'lazyloadxt':
       $image_to_display = $display['settings']['image_to_display'];
+      $colorbox = $display['settings']['colorbox'];
 
       if($image_to_display > 0){
         for($i = 0; $i < $image_to_display; $i++){
@@ -132,30 +156,44 @@ function lazyloadxt_field_formatter_view($entity_type, $entity, $field, $instanc
               '#width' => $dimensions['width'],
               '#height' => $dimensions['height']
             );
+            
+            if($colorbox){
+              $colorbox_style = $display['settings']['colorbox_style'];
+              $colorbox_url = $colorbox_style == 'none' ? file_create_url($items[$i]['uri']) : image_style_url($colorbox_style, $items[$i]['uri']);
+              
+              $element[$i]['#colorbox'] = $colorbox_url;
+            }
           }
         }
       }else{
         foreach($items as $delta => $item) {
-           $style = $display['settings']['style'];
-           $url = $style == 'none' ? file_create_url($item['uri']) : image_style_url($style, $item['uri']);
-           $dimensions = array(
-             'width' => $item['width'],
-             'height' => $item['height']
-           );
-           
-           if($style != 'none'){
-             $style_info = image_style_load($style);
-             foreach($style_info['effects'] as $effect){
-               image_style_transform_dimensions($style, $dimensions);
-             }
+          $style = $display['settings']['style'];
+          $url = $style == 'none' ? file_create_url($item['uri']) : image_style_url($style, $item['uri']);
+          $dimensions = array(
+            'width' => $item['width'],
+            'height' => $item['height']
+          );
+          
+          if($style != 'none'){
+            $style_info = image_style_load($style);
+            foreach($style_info['effects'] as $effect){
+              image_style_transform_dimensions($style, $dimensions);
+            }
+          }
+          
+          $element[$delta] = array(
+            '#theme' => 'lazyloadxt',
+            '#url' => $url,
+            '#width' => $dimensions['width'],
+            '#height' => $dimensions['height']
+          );
+          
+          if($colorbox){
+             $colorbox_style = $display['settings']['colorbox_style'];
+             $colorbox_url = $colorbox_style == 'none' ? file_create_url($items[$delta]['uri']) : image_style_url($colorbox_style, $items[$delta]['uri']);
+             
+             $element[$delta]['#colorbox'] = $colorbox_url;
            }
-           
-           $element[$delta] = array(
-             '#theme' => 'lazyloadxt',
-             '#url' => $url,
-             '#width' => $dimensions['width'],
-             '#height' => $dimensions['height']
-           );
         }
       }
     break;
@@ -171,13 +209,42 @@ function lazyloadxt_theme(){
   return array(
     'lazyloadxt' => array(
       'template' => 'lazyloadxt',
-      'variables' => array(
-        'url' => NULL,
-        'width' => NULL,
-        'height' => NULL
-      )
+      'render element' => 'element'
     )
   );
+}
+
+/**
+ * Theme preprocess function for theme_lazyloadxt() and lazyloadxt.tpl.php.
+ *
+ * @see lazyloadxt.tpl.php
+ */
+function template_preprocess_lazyloadxt(&$variables, $hook){
+  $element = $variables['element'];
+  
+  $image = theme('image', array('path' => $element['#url'], 'width' => $element['#width'], 'height' => $element['#height'], 'alt' => ''));
+  $lazy_image = theme('image', array(
+    'path' => 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+    'width' => $element['#width'],
+    'height' => $element['#height'],
+    'attributes' => array(
+      'class' => array('lazy'),
+      'data-src' => $element['#url']
+    )
+  ));
+  
+  $output = array(
+    '#type' => 'markup',
+    '#markup' => $lazy_image,
+    '#suffix' => '<noscript>' . $image . '</noscript>'
+  );
+  
+  if($element['#colorbox']){
+    $output['#prefix'] = '<a href="' . $element['#colorbox'] . '" class="colorbox" rel="lazyload-gallery">';
+    $output['#suffix'] .= '</a>';
+  }
+  
+  $variables['element'] = $output;
 }
 
 /**
