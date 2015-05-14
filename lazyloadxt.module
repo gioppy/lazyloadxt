@@ -161,6 +161,7 @@ function lazyloadxt_field_formatter_view($entity_type, $entity, $field, $instanc
               $colorbox_style = $display['settings']['colorbox_style'];
               $colorbox_url = $colorbox_style == 'none' ? file_create_url($items[$i]['uri']) : image_style_url($colorbox_style, $items[$i]['uri']);
               
+              $element[$i]['#rel'] = $instance['id'];
               $element[$i]['#colorbox'] = $colorbox_url;
             }
           }
@@ -192,6 +193,7 @@ function lazyloadxt_field_formatter_view($entity_type, $entity, $field, $instanc
              $colorbox_style = $display['settings']['colorbox_style'];
              $colorbox_url = $colorbox_style == 'none' ? file_create_url($items[$delta]['uri']) : image_style_url($colorbox_style, $items[$delta]['uri']);
              
+             $element[$delta]['#rel'] = $instance['id'];
              $element[$delta]['#colorbox'] = $colorbox_url;
            }
         }
@@ -210,6 +212,14 @@ function lazyloadxt_theme(){
     'lazyloadxt' => array(
       'template' => 'lazyloadxt',
       'render element' => 'element'
+    ),
+    'image_data' => array(
+      'variables' => array(
+        'path' => NULL,
+        'width' => NULL,
+        'height' => NULL,
+        'attributs' => array()
+      )
     )
   );
 }
@@ -223,7 +233,7 @@ function template_preprocess_lazyloadxt(&$variables, $hook){
   $element = $variables['element'];
   
   $image = theme('image', array('path' => $element['#url'], 'width' => $element['#width'], 'height' => $element['#height'], 'alt' => ''));
-  $lazy_image = theme('image', array(
+  $lazy_image = theme('image_data', array(
     'path' => 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
     'width' => $element['#width'],
     'height' => $element['#height'],
@@ -239,12 +249,29 @@ function template_preprocess_lazyloadxt(&$variables, $hook){
     '#suffix' => '<noscript>' . $image . '</noscript>'
   );
   
-  if($element['#colorbox']){
-    $output['#prefix'] = '<a href="' . $element['#colorbox'] . '" class="colorbox" rel="lazyload-gallery">';
+  if(isset($element['#colorbox']) && !empty($element['#colorbox'])){
+    $output['#prefix'] = '<a href="' . $element['#colorbox'] . '" class="colorbox lazyload-colorbox" rel="lazyload-gallery-'.$element['#rel'].'">';
     $output['#suffix'] .= '</a>';
   }
   
   $variables['element'] = $output;
+}
+
+/**
+ * Return HTML for a data:image
+ */
+function theme_image_data($variables) {
+  $attributes = $variables ['attributes'];
+  $attributes['src'] = $variables ['path'];
+
+  foreach (array('width', 'height', 'alt', 'title') as $key) {
+
+    if (isset($variables [$key])) {
+      $attributes[$key] = $variables[$key];
+    }
+  }
+
+  return '<img' . drupal_attributes($attributes) . ' />';
 }
 
 /**
