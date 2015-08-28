@@ -154,7 +154,9 @@ function lazyloadxt_field_formatter_view($entity_type, $entity, $field, $instanc
               '#theme' => 'lazyloadxt',
               '#url' => $url,
               '#width' => $dimensions['width'],
-              '#height' => $dimensions['height']
+              '#height' => $dimensions['height'],
+              '#title' => $items[$i]['title'],
+              '#alt' => $items[$i]['alt']
             );
             
             if($colorbox){
@@ -186,7 +188,9 @@ function lazyloadxt_field_formatter_view($entity_type, $entity, $field, $instanc
             '#theme' => 'lazyloadxt',
             '#url' => $url,
             '#width' => $dimensions['width'],
-            '#height' => $dimensions['height']
+            '#height' => $dimensions['height'],
+            '#title' => $item['title'],
+            '#alt' => $item['alt']
           );
           
           if($colorbox){
@@ -218,6 +222,8 @@ function lazyloadxt_theme(){
         'path' => NULL,
         'width' => NULL,
         'height' => NULL,
+        'title' => NULL,
+        'alt' => NULL,
         'attributs' => array()
       )
     )
@@ -232,11 +238,13 @@ function lazyloadxt_theme(){
 function template_preprocess_lazyloadxt(&$variables, $hook){
   $element = $variables['element'];
   
-  $image = theme('image', array('path' => $element['#url'], 'width' => $element['#width'], 'height' => $element['#height'], 'alt' => ''));
+  $image = theme('image', array('path' => $element['#url'], 'width' => $element['#width'], 'height' => $element['#height'], 'alt' => $element['#alt'], 'title' => $element['#title']));
   $lazy_image = theme('image_data', array(
     'path' => 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
     'width' => $element['#width'],
     'height' => $element['#height'],
+    'title' => $element['#title'],
+    'alt' => $element['#alt'],
     'attributes' => array(
       'class' => array('lazy'),
       'data-src' => $element['#url']
@@ -250,7 +258,8 @@ function template_preprocess_lazyloadxt(&$variables, $hook){
   );
   
   if(isset($element['#colorbox']) && !empty($element['#colorbox'])){
-    $output['#prefix'] = '<a href="' . $element['#colorbox'] . '" class="colorbox lazyload-colorbox" rel="lazyload-gallery-'.$element['#rel'].'">';
+    $title = !empty($element['#title']) ? $element['#title'] : '';
+    $output['#prefix'] = '<a href="' . $element['#colorbox'] . '" class="lazyload-colorbox lazyload-colorbox-load" rel="lazyload-gallery-'.$element['#rel'].'" title="' . $title . '">';
     $output['#suffix'] .= '</a>';
   }
   
